@@ -4,7 +4,10 @@ import axios from "axios";
 export default function ChatComponent({ chatRoom, currentUser }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const messagesContainer = useRef(null);
+
+  console.log(selectedFiles);
 
   // Scroll to the bottom whenever messages update
   useEffect(() => {
@@ -53,12 +56,30 @@ export default function ChatComponent({ chatRoom, currentUser }) {
       });
   };
 
+  const handleFileChange = (e) => {
+    setSelectedFiles((prevFiles) => [...prevFiles, ...Array.from(e.target.files)]);
+  };
+
+  const sendFile = () => {
+    console.log('sendFile');
+  }
+
+  const onDeleteClick = (index) => {
+    console.log('deleted Clicked');
+    console.log(index);
+    setSelectedFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
+  }
+
+  const onDeleteAllClick = () => {
+    setSelectedFiles([]);
+  }
+
   return (
     <div>
-      <div className="flex flex-col justify-end h-80">
+      <div className="flex flex-col justify-end h-full max-h-[calc(100vh-400px)]">
         <div
           ref={messagesContainer}
-          className="p-4 overflow-y-auto max-h-fit"
+          className="overflow-y-auto max-h-fit px-5"
         >
           {messages.map((message, index) => (
             <div
@@ -92,7 +113,48 @@ export default function ChatComponent({ chatRoom, currentUser }) {
           ))}
         </div>
       </div>
-      <div className="flex items-center">
+      {selectedFiles != ""
+        ? <div className="flex items-center justify-between">
+          <div className="flex gap-4 py-2 overflow-x-auto whitespace-nowrap items-center">
+            {/* 파일 목록 */}
+            {selectedFiles.map((file, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-2 border p-2 rounded"
+              >
+                <span className="text-gray-700">{file.name}</span>
+                <button
+                  onClick={() => onDeleteClick(index)}
+                  className="material-icons-outlined align-middle cursor-pointer text-red-500"
+                >
+                  delete
+                </button>
+              </div>
+            ))}
+          </div>
+          {/* 전체 삭제 버튼 */}
+          <div className="flex-shrink-0 items-center">
+            <button
+              onClick={onDeleteAllClick}
+              className="ml-4 px-4 py-2 bg-red-500 text-white rounded-lg cursor-pointer"
+            >
+              전체 삭제
+            </button>
+          </div>
+        </div>
+        : null
+      }
+      <div className="flex items-center pt-2">
+        <input
+          type="file"
+          multiple
+          onChange={handleFileChange}
+          className="hidden"
+          id="file-input"
+        />
+        <label htmlFor="file-input" className="material-icons-outlined pr-2 py-1 cursor-pointer">
+          upload_file
+        </label>
         <input
           type="text"
           value={newMessage}

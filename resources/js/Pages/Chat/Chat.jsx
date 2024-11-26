@@ -16,7 +16,10 @@ export default function Chat() {
         </h2>
       }
     >
-      <Head title="ChatRoom" />
+      <Head title="ChatRoom">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet" />
+      </Head>
+
 
       <div className="py-12">
         <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
