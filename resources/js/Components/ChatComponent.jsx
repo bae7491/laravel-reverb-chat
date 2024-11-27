@@ -5,9 +5,8 @@ export default function ChatComponent({ chatRoom, currentUser }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [deleteCompleted, setDeleteCompleted] = useState(false);
   const messagesContainer = useRef(null);
-
-  console.log(selectedFiles);
 
   // Scroll to the bottom whenever messages update
   useEffect(() => {
@@ -39,40 +38,61 @@ export default function ChatComponent({ chatRoom, currentUser }) {
     };
   }, [chatRoom.id]);
 
-  // Handle sending a new message
-  const sendMessage = () => {
+  const sendMessageWithFiles = () => {
     if (newMessage.trim() === "") {
       alert("메시지를 입력해주세요!");
       return;
     }
 
+    const formData = new FormData();
+    formData.append("message", newMessage);
+    formData.append("chat_room_id", chatRoom.id);
+
+    selectedFiles.forEach((file, index) => {
+      formData.append(`files[${index}]`, file);
+    });
+
     axios
-      .post(`/messages/${chatRoom.id}`, {
-        message: newMessage,
+      .post(`/messages/${chatRoom.id}`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       })
       .then((response) => {
-        setMessages((prevMessages) => [...prevMessages, response.data]);
+        setMessages((prevMessages) => [...prevMessages, response.data.message]);
         setNewMessage("");
+        setSelectedFiles([]);
+      })
+      .catch((error) => {
+        console.error("파일 업로드 중 오류 발생:", error);
       });
   };
+
 
   const handleFileChange = (e) => {
     setSelectedFiles((prevFiles) => [...prevFiles, ...Array.from(e.target.files)]);
   };
 
-  const sendFile = () => {
-    console.log('sendFile');
-  }
-
   const onDeleteClick = (index) => {
-    console.log('deleted Clicked');
-    console.log(index);
-    setSelectedFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
+    if (window.confirm("삭제하시겠습니까?")) {
+      setSelectedFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
+      setDeleteCompleted(true);
+    }
   }
 
   const onDeleteAllClick = () => {
-    setSelectedFiles([]);
+    if (window.confirm("전체 삭제하시겠습니까?")) {
+      setSelectedFiles([]);
+      setDeleteCompleted(true);
+    }
   }
+
+  useEffect(() => {
+    if (deleteCompleted) {
+      alert("삭제되었습니다.")
+      setDeleteCompleted(false);
+    }
+  });
 
   return (
     <div>
@@ -89,7 +109,38 @@ export default function ChatComponent({ chatRoom, currentUser }) {
             >
               {message.sender_id === currentUser.id ? (
                 <div className="flex flex-col items-end mb-2">
-                  <div className="p-2 text-white bg-blue-500 rounded-lg">
+                  {message.media && message.media.length > 0 && (
+                    <div className="flex flex-col items-end space-y-2 mb-2">
+                      {message.media.map((file, fileIndex) => (
+                        <div
+                          key={fileIndex}
+                          className="flex justify-end"
+                        >
+                          {file.mime_type.startsWith("image/") ? (
+                            // 이미지의 썸네일을 표시
+                            <img
+                              src={file.custom_properties.original_url}
+                              alt={file.file_name}
+                              className="max-w-[40%] p-2 object-contain block border rounded"
+                            />
+                          ) : (
+                            <div className="flex items-end gap-2 p-2 rounded border">
+                              <span className="max-w-[600px] overflow-hidden text-ellipsis whitespace-nowrap">
+                                {file.file_name}
+                              </span>
+                              <a
+                                href={`/download/${file.id}`}
+                                className="material-icons-outlined align-middle cursor-pointer"
+                              >
+                                download
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="p-2 text-white bg-blue-500 rounded-lg max-w-[600px]">
                     {message.text}
                   </div>
                   <span className="text-xs text-gray-500">
@@ -101,7 +152,38 @@ export default function ChatComponent({ chatRoom, currentUser }) {
                   <strong className="text-sm text-gray-700">
                     {message.sender_name}
                   </strong>
-                  <div className="p-2 bg-gray-200 rounded-lg max-w-max break-words">
+                  {message.media && message.media.length > 0 && (
+                    <div className="flex flex-col items-start space-y-1 mb-2">
+                      {message.media.map((file, fileIndex) => (
+                        <div
+                          key={fileIndex}
+                          className="flex justify-start"
+                        >
+                          {file.mime_type.startsWith("image/") ? (
+                            // 이미지의 썸네일을 표시
+                            <img
+                              src={file.custom_properties.original_url}
+                              alt={file.file_name}
+                              className="max-w-[40%] p-2 object-contain block border rounded"
+                            />
+                          ) : (
+                            <div className="flex items-end gap-2 p-2 rounded border">
+                              <span className="max-w-[600px] overflow-hidden text-ellipsis whitespace-nowrap">
+                                {file.file_name}
+                              </span>
+                              <a
+                                href={`/download/${file.id}`}
+                                className="material-icons-outlined align-middle cursor-pointer"
+                              >
+                                download
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="p-2 bg-gray-200 rounded-lg max-w-[600px] break-words">
                     {message.text}
                   </div>
                   <span className="text-xs text-gray-500">
@@ -144,7 +226,7 @@ export default function ChatComponent({ chatRoom, currentUser }) {
         </div>
         : null
       }
-      <div className="flex items-center pt-2">
+      <div className="flex items-center pt-6">
         <input
           type="file"
           multiple
@@ -161,14 +243,14 @@ export default function ChatComponent({ chatRoom, currentUser }) {
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-              sendMessage();
+              sendMessageWithFiles();
             }
           }}
           placeholder="메시지를 입력"
           className="flex-1 px-2 py-1 border rounded-lg"
         />
         <button
-          onClick={sendMessage}
+          onClick={sendMessageWithFiles}
           className="px-4 py-1 ml-2 text-white bg-blue-500 rounded-lg"
         >
           전송

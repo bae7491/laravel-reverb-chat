@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use App\Http\Controllers\MediaController;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -44,23 +45,41 @@ Route::get('/messages/{chatRoom}', function (ChatRoom $chatRoom) {
     ->where(function ($query) use ($chatRoom) {
       $query->where('chatroom_id', $chatRoom->id);
     })
-    ->with(['sender', 'receiver']) 
+    ->with(['sender', 'receiver', 'media']) 
     ->orderBy('id', 'asc')
     ->get();
 })->middleware(['auth']);
 
-Route::post('/messages/{chatRoom}', function (ChatRoom $chatRoom) {
-  $message = ChatMessage::create([
-    'chatroom_id' => $chatRoom->id,
-    'sender_id' => Auth::id(),
-    'sender_name' => Auth::user()->name,
-    'text' => request()->input('message'),
-  ]);
+Route::post('/messages/{chatRoom}', function (ChatRoom $chatRoom, Request $request) {
+    $message = ChatMessage::create([
+        'chatroom_id' => $chatRoom->id,
+        'sender_id' => Auth::id(),
+        'sender_name' => Auth::user()->name,
+        'text' => request()->input('message'),
+    ]);
 
-  broadcast(new MessageSent($message));
+    if ($request->hasFile('files')) {
+      foreach ($request->file('files') as $file) {
+        $media = $message->addMedia($file)
+          ->toMediaCollection('attachments');
+    
+        // 파일 URL을 custom_properties에 추가
+        $media
+          ->setCustomProperty('original_url', $media->getUrl())
+          ->save();
+      }
+    }
 
-  return $message;
+    $messageWithMedia = $message->load('media');
+
+    broadcast(new MessageSent($messageWithMedia))->toOthers();
+
+    return response()->json([
+        'message' => $messageWithMedia,
+    ]);
 });
+
+Route::get('/download/{media}', [MediaController::class, 'download'])->name('media.download');
 
 Route::get('/createchatroom', function() {
   return Inertia::render('Chat/CreateChatRoom');
@@ -95,10 +114,10 @@ Route::post('chatroom/join', function (Request $request) {
   $chatRoom = ChatRoom::where('name', $request->name)->first();
 
   if (!$chatRoom || !Hash::check($request->password, $chatRoom->password)) {
-    return response()->json(['error' => 'Invalid room name or password'], 401);
+    return response()->json(['error' => '잘못된 방 이름이나 비밀번호를 입력했습니다! 다시 확인해주세요.'], 401);
   }
 
-  return response()->json(['message' => 'Access grated', 'chatRoom' => $chatRoom]);
+  return response()->json(['message' => '접속을 환영합니다!', 'chatRoom' => $chatRoom]);
 });
 
 require __DIR__.'/auth.php';

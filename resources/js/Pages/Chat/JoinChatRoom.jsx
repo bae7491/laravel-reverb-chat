@@ -17,7 +17,7 @@ export default function JoinChatRoom() {
       alert(`"${response.data.chatRoom.name}" 입장에 성공했습니다!`);
       router.visit(`/chatroom/${chatRoom.id}`);
     } catch (error) {
-      alert("Error joining chat room: " + error.response.data.error);
+      alert("방 참가 에러: " + error.response.data.error);
     }
   };
 
