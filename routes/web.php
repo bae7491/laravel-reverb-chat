@@ -11,6 +11,9 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\MediaController;
+use Illuminate\Support\Facades\Storage;
+use ProtoneMedia\LaravelFFMpeg\Filters\WatermarkFactory;
+use ProtoneMedia\LaravelFFMpeg\Support\FFMpeg;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -60,13 +63,50 @@ Route::post('/messages/{chatRoom}', function (ChatRoom $chatRoom, Request $reque
 
     if ($request->hasFile('files')) {
       foreach ($request->file('files') as $file) {
-        $media = $message->addMedia($file)
-          ->toMediaCollection('attachments');
+        if (str_starts_with($file->getMimeType(), 'video/')) {
+          // 파일 temp에 ㅋ저장
+          $file->storeAs('temp', $file->getClientOriginalName(), 'local');
+
+          // 변환 후 저장 경로
+          $outputFileName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME) . '_converted.mp4';
+          $outputPath = "temp/{$outputFileName}";
+
+          // FFmpeg 변환
+          FFMpeg::fromDisk('local')
+            ->open('temp/' . $file->getClientOriginalName())
+            ->export()
+            ->toDisk('local')
+            ->addFilter('-vf', 'scale=720:480') // 비디오 리사이즈 필터 추가
+            ->inFormat(new \FFMpeg\Format\Video\X264('aac', 'libx264'))
+            ->addWatermark(function (WatermarkFactory $watermark) {
+              $watermark->fromDisk('public')
+                ->open('logo.png')
+                ->right(25)
+                ->bottom(25);
+            })
+            ->save($outputPath);
+
+          $videoPath = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME) . '.mp4';
+            
+          // // 원본 파일 덮어쓰기
+          Storage::disk('local')->delete('temp/' . $file->getClientOriginalName());
+          Storage::disk('local')->move($outputPath, "temp/{$videoPath}");
+
+          // Media Library에 파일 추가
+          $media = $message->addMedia(storage_path("app/private/temp/{$videoPath}"))
+            ->toMediaCollection('attachments');
+
+          // 파일 URL을 custom_properties에 추가
+          $media->setCustomProperty('original_url', $media->getUrl())
+            ->save();
+        } else {
+          $media = $message->addMedia($file)
+            ->toMediaCollection('attachments');
     
-        // 파일 URL을 custom_properties에 추가
-        $media
-          ->setCustomProperty('original_url', $media->getUrl())
-          ->save();
+          // 파일 URL을 custom_properties에 추가
+          $media->setCustomProperty('original_url', $media->getUrl())
+            ->save();
+        }
       }
     }
 

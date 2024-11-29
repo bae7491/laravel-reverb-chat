@@ -17,6 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
+        $middleware->alias([
+          'FFMpeg' => ProtoneMedia\LaravelFFMpeg\Support\FFMpeg::class
+        ]);
+
         //
     })
     ->withExceptions(function (Exceptions $exceptions) {

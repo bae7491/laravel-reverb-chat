@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
+import Video from "./Video";
+
 export default function ChatComponent({ chatRoom, currentUser }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [deleteCompleted, setDeleteCompleted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const messagesContainer = useRef(null);
 
   // Scroll to the bottom whenever messages update
@@ -16,6 +19,28 @@ export default function ChatComponent({ chatRoom, currentUser }) {
         behavior: "smooth",
       });
     }
+
+    const handleVideoLoaded = () => {
+      if (messagesContainer.current) {
+        messagesContainer.current.scrollTo({
+          top: messagesContainer.current.scrollHeight,
+          behavior: "smooth",
+        });
+      }
+    };
+
+    // 메시지에 포함된 모든 비디오에 로드 이벤트 리스너 추가
+    const videos = messagesContainer.current?.querySelectorAll("video");
+    videos?.forEach((video) => {
+      video.addEventListener("loadeddata", handleVideoLoaded);
+    });
+
+    // Cleanup 이벤트 리스너
+    return () => {
+      videos?.forEach((video) => {
+        video.removeEventListener("loadeddata", handleVideoLoaded);
+      });
+    };
   }, [messages]);
 
   // Fetch initial messages and setup Echo listeners
@@ -52,6 +77,8 @@ export default function ChatComponent({ chatRoom, currentUser }) {
       formData.append(`files[${index}]`, file);
     });
 
+    setLoading(true);
+
     axios
       .post(`/messages/${chatRoom.id}`, formData, {
         headers: {
@@ -62,9 +89,11 @@ export default function ChatComponent({ chatRoom, currentUser }) {
         setMessages((prevMessages) => [...prevMessages, response.data.message]);
         setNewMessage("");
         setSelectedFiles([]);
+        setLoading(false);
       })
       .catch((error) => {
         console.error("파일 업로드 중 오류 발생:", error);
+        setLoading(false);
       });
   };
 
@@ -123,6 +152,11 @@ export default function ChatComponent({ chatRoom, currentUser }) {
                               alt={file.file_name}
                               className="max-w-[40%] p-2 object-contain block border rounded"
                             />
+                          ) : file.mime_type.startsWith("video/") ? (
+                            // <video className="p-2 object-contain block border rounded" controls>
+                            //   <source src={file.custom_properties.original_url} />
+                            // </video>
+                            <Video src={file.custom_properties.original_url} />
                           ) : (
                             <div className="flex items-end gap-2 p-2 rounded border">
                               <span className="max-w-[600px] overflow-hidden text-ellipsis whitespace-nowrap">
@@ -166,19 +200,24 @@ export default function ChatComponent({ chatRoom, currentUser }) {
                               alt={file.file_name}
                               className="max-w-[40%] p-2 object-contain block border rounded"
                             />
-                          ) : (
-                            <div className="flex items-end gap-2 p-2 rounded border">
-                              <span className="max-w-[600px] overflow-hidden text-ellipsis whitespace-nowrap">
-                                {file.file_name}
-                              </span>
-                              <a
-                                href={`/download/${file.id}`}
-                                className="material-icons-outlined align-middle cursor-pointer"
-                              >
-                                download
-                              </a>
-                            </div>
-                          )}
+                          ) : file.mime_type.startsWith("video/") ? (
+                            <video className="p-2 object-contain block border rounded" controls>
+                              <source src={file.custom_properties.original_url} />
+                            </video>
+                          )
+                            : (
+                              <div className="flex items-end gap-2 p-2 rounded border">
+                                <span className="max-w-[600px] overflow-hidden text-ellipsis whitespace-nowrap">
+                                  {file.file_name}
+                                </span>
+                                <a
+                                  href={`/download/${file.id}`}
+                                  className="material-icons-outlined align-middle cursor-pointer"
+                                >
+                                  download
+                                </a>
+                              </div>
+                            )}
                         </div>
                       ))}
                     </div>
@@ -251,11 +290,21 @@ export default function ChatComponent({ chatRoom, currentUser }) {
         />
         <button
           onClick={sendMessageWithFiles}
-          className="px-4 py-1 ml-2 text-white bg-blue-500 rounded-lg"
+          className={
+            `px-4 py-1 ml-2 rounded-lg text-white ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500"}`
+          }
+          disabled={loading}
         >
           전송
         </button>
       </div>
+      {loading ? (
+        <div>
+          <a>
+            {loading ? "전송 중..." : ""}
+          </a>
+        </div>
+      ) : null}
     </div>
   );
 }
